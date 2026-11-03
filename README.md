@@ -166,3 +166,7 @@ Use only on systems and engagements where you are permitted to connect test hard
 ## License / use
 
 Internal / engagement lab use unless otherwise stated by the repository owner. Do not use to circumvent security policy outside an authorized scope.
+
+## Contact
+
+Blog: https://xavilok.es
