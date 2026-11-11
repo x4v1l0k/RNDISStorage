@@ -20,7 +20,7 @@ Existen variantes (T-Dongle-S3, Dual, Plus). Esta PoC apunta a **T-Dongle-S3** c
 - Controlador USB: **PHY USB nativo del ESP32-S3**
 - **USB Mass Storage:** no implementado / no habilitado
 - CDC on boot: habilitado para flasheo/monitor (`ARDUINO_USB_MODE=1`)
-- Canal de ficheros: **HTTP/WebDAV** en `203.0.113.1` (SoftAP lab; gadget RNDIS USB = siguiente transporte)
+- Canal de ficheros: **HTTP/WebDAV** por **USB NCM** (`203.0.113.1`) y por **SoftAP** (`192.168.4.1`)
 
 ## SoftAP lab
 
@@ -28,9 +28,17 @@ Existen variantes (T-Dongle-S3, Dual, Plus). Esta PoC apunta a **T-Dongle-S3** c
 | --- | --- |
 | SSID | `RNDISStorage` |
 | Password | `rndis-lab` |
-| IP | `203.0.113.1` |
-| HTTP | puerto 80 |
+| Canal | 6 |
+| IP SoftAP | `192.168.4.1` |
+| IP USB NCM (dongle) | `203.0.113.1` |
+| IP USB NCM (host DHCP) | `203.0.113.2` |
+| SOCKS5 (pivot) | `192.168.4.1:1080` (recomendado) |
+| NAPT SoftAP → USB | best-effort (si el cliente usa GW `192.168.4.1`) |
+| HTTP | puerto 80 (ambas interfaces) |
 | WebDAV | `/dav/` |
+| Probe pivot | `GET /api/pivot/probe?port=1234` |
+
+Ejemplos SoftAP → host: ver [PIVOT.md](PIVOT.md) (`curl --socks5 …`, `ssh ProxyCommand`).
 
 ## GPIO relevantes
 

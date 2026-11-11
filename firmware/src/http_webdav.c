@@ -3,7 +3,12 @@
 #include "path_util.h"
 #include "status_display.h"
 #include "storage.h"
+#include "net_pivot.h"
+#include "socks_proxy.h"
+#include "wifi_ap.h"
 #include "www_index.h"
+
+#include "lwip/sockets.h"
 
 #include <ctype.h>
 #include <stdbool.h>
@@ -11,9 +16,22 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "lwip/inet.h"
+
 #include "esp_check.h"
+#include "esp_heap_caps.h"
 #include "esp_http_server.h"
 #include "esp_log.h"
+
+/** Prefer larger buffered I/O; allocated once per transfer on the heap. */
+static char *io_chunk_alloc(void)
+{
+    char *p = (char *)heap_caps_malloc(RNDISSTORAGE_IO_CHUNK, MALLOC_CAP_DEFAULT);
+    if (!p) {
+        p = (char *)malloc(RNDISSTORAGE_IO_CHUNK);
+    }
+    return p;
+}
 
 static const char *TAG = "http";
 static httpd_handle_t s_server = NULL;
@@ -189,19 +207,71 @@ static esp_err_t h_root(httpd_req_t *req)
     return httpd_resp_send(req, WWW_INDEX_HTML, HTTPD_RESP_USE_STRLEN);
 }
 
+static bool probe_host_tcp(const char *ip, uint16_t port, int timeout_ms)
+{
+    int fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (fd < 0) {
+        return false;
+    }
+    struct timeval tv = {.tv_sec = timeout_ms / 1000, .tv_usec = (timeout_ms % 1000) * 1000};
+    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+    struct sockaddr_in dest = {0};
+    dest.sin_family = AF_INET;
+    dest.sin_port = htons(port);
+    if (!inet_aton(ip, &dest.sin_addr)) {
+        close(fd);
+        return false;
+    }
+    bool ok = connect(fd, (struct sockaddr *)&dest, sizeof(dest)) == 0;
+    close(fd);
+    return ok;
+}
+
 static esp_err_t h_info(httpd_req_t *req)
 {
     storage_info_t si = storage_info();
-    char body[512];
+    char body[1200];
     snprintf(body, sizeof(body),
-             "{\"status\":\"ok\",\"device\":\"%s\",\"version\":\"%s\",\"transport\":\"usb-ncm\","
-             "\"ip\":\"%s\",\"webdav_root\":\"/dav/\","
+             "{\"status\":\"ok\",\"device\":\"%s\",\"version\":\"%s\",\"transport\":\"usb-ncm+softap\","
+             "\"ip\":\"%s\",\"wifi\":{\"up\":%s,\"ssid\":\"%s\",\"ip\":\"%s\"},"
+             "\"pivot\":{\"up\":%s,\"napt\":true,\"usb_dongle_ip\":\"%s\",\"usb_host_ip\":\"%s\","
+             "\"socks\":{\"up\":%s,\"port\":%d},"
+             "\"hint\":\"Preferred: curl --socks5 %s:%d http://%s:PORT/  (or ssh -o ProxyCommand=... )\"},"
+             "\"webdav_root\":\"/dav/\","
              "\"storage\":{\"backend\":\"%s\",\"mounted\":%s,\"total_bytes\":%llu,"
              "\"used_bytes\":%llu,\"free_bytes\":%llu,\"supports_format\":false}}",
-             RNDISSTORAGE_DEVICE_NAME, RNDISSTORAGE_PROTOCOL_VERSION, RNDISSTORAGE_IP_ADDR, si.backend,
-             si.mounted ? "true" : "false", (unsigned long long)si.total_bytes,
-             (unsigned long long)si.used_bytes, (unsigned long long)si.free_bytes);
+             RNDISSTORAGE_DEVICE_NAME, RNDISSTORAGE_PROTOCOL_VERSION, RNDISSTORAGE_IP_ADDR,
+             wifi_ap_is_up() ? "true" : "false", wifi_ap_ssid(), wifi_ap_ip(),
+             net_pivot_is_up() ? "true" : "false", RNDISSTORAGE_IP_ADDR, net_pivot_host_ip(),
+             socks_proxy_is_up() ? "true" : "false", socks_proxy_port(), wifi_ap_ip(), socks_proxy_port(),
+             net_pivot_host_ip(), si.backend, si.mounted ? "true" : "false",
+             (unsigned long long)si.total_bytes, (unsigned long long)si.used_bytes,
+             (unsigned long long)si.free_bytes);
     return send_json(req, 200, body);
+}
+
+static esp_err_t h_pivot_probe(httpd_req_t *req)
+{
+    char q[64];
+    uint16_t port = 1234;
+    if (httpd_req_get_url_query_str(req, q, sizeof(q)) == ESP_OK) {
+        char p[16];
+        if (httpd_query_key_value(q, "port", p, sizeof(p)) == ESP_OK) {
+            int v = atoi(p);
+            if (v > 0 && v < 65536) {
+                port = (uint16_t)v;
+            }
+        }
+    }
+    bool ok = probe_host_tcp(net_pivot_host_ip(), port, 1500);
+    char body[256];
+    snprintf(body, sizeof(body),
+             "{\"status\":\"%s\",\"host\":\"%s\",\"port\":%u,\"reachable\":%s,"
+             "\"socks\":\"%s:%d\"}",
+             ok ? "ok" : "error", net_pivot_host_ip(), port, ok ? "true" : "false", wifi_ap_ip(),
+             socks_proxy_port());
+    return send_json(req, ok ? 200 : 503, body);
 }
 
 static esp_err_t h_list(httpd_req_t *req)
@@ -312,19 +382,27 @@ static esp_err_t stream_file(httpd_req_t *req, const char *path)
     if (!f) {
         return send_json(req, 404, "{\"status\":\"error\",\"error\":\"not_found\",\"message\":\"file not found\"}");
     }
+    char *chunk = io_chunk_alloc();
+    if (!chunk) {
+        fclose(f);
+        return send_json(req, 500, "{\"status\":\"error\",\"error\":\"oom\",\"message\":\"oom\"}");
+    }
+    setvbuf(f, NULL, _IOFBF, RNDISSTORAGE_IO_CHUNK);
     status_display_set_status(UI_TRANSFERRING);
     httpd_resp_set_type(req, "application/octet-stream");
-    char chunk[1024];
     size_t n;
-    while ((n = fread(chunk, 1, sizeof(chunk), f)) > 0) {
+    esp_err_t err = ESP_OK;
+    while ((n = fread(chunk, 1, RNDISSTORAGE_IO_CHUNK, f)) > 0) {
         if (httpd_resp_send_chunk(req, chunk, n) != ESP_OK) {
+            err = ESP_FAIL;
             break;
         }
     }
     fclose(f);
+    free(chunk);
     httpd_resp_send_chunk(req, NULL, 0);
     status_display_set_status(UI_READY);
-    return ESP_OK;
+    return err;
 }
 
 static esp_err_t h_download(httpd_req_t *req)
@@ -353,21 +431,33 @@ static esp_err_t h_upload(httpd_req_t *req)
     if (!f) {
         return send_json(req, 500, "{\"status\":\"error\",\"error\":\"upload_failed\",\"message\":\"cannot open\"}");
     }
+    char *chunk = io_chunk_alloc();
+    if (!chunk) {
+        fclose(f);
+        return send_json(req, 500, "{\"status\":\"error\",\"error\":\"oom\",\"message\":\"oom\"}");
+    }
+    setvbuf(f, NULL, _IOFBF, RNDISSTORAGE_IO_CHUNK);
     status_display_set_status(UI_TRANSFERRING);
-    char chunk[1024];
     int remaining = req->content_len;
     while (remaining > 0) {
-        int to_read = remaining > (int)sizeof(chunk) ? (int)sizeof(chunk) : remaining;
+        int to_read = remaining > RNDISSTORAGE_IO_CHUNK ? RNDISSTORAGE_IO_CHUNK : remaining;
         int r = httpd_req_recv(req, chunk, to_read);
         if (r <= 0) {
             fclose(f);
+            free(chunk);
             status_display_set_status(UI_READY);
             return send_json(req, 500, "{\"status\":\"error\",\"error\":\"upload_failed\",\"message\":\"recv\"}");
         }
-        fwrite(chunk, 1, (size_t)r, f);
+        if (fwrite(chunk, 1, (size_t)r, f) != (size_t)r) {
+            fclose(f);
+            free(chunk);
+            status_display_set_status(UI_READY);
+            return send_json(req, 500, "{\"status\":\"error\",\"error\":\"upload_failed\",\"message\":\"write\"}");
+        }
         remaining -= r;
     }
     fclose(f);
+    free(chunk);
     status_display_set_status(UI_READY);
     return send_json(req, 200, "{\"status\":\"ok\"}");
 }
@@ -444,20 +534,36 @@ static esp_err_t h_dav(httpd_req_t *req)
             httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "write");
             return ESP_FAIL;
         }
+        char *chunk = io_chunk_alloc();
+        if (!chunk) {
+            fclose(f);
+            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "oom");
+            return ESP_FAIL;
+        }
+        setvbuf(f, NULL, _IOFBF, RNDISSTORAGE_IO_CHUNK);
         status_display_set_status(UI_TRANSFERRING);
-        char chunk[1024];
         int remaining = req->content_len;
+        bool ok = true;
         while (remaining > 0) {
-            int to_read = remaining > (int)sizeof(chunk) ? (int)sizeof(chunk) : remaining;
+            int to_read = remaining > RNDISSTORAGE_IO_CHUNK ? RNDISSTORAGE_IO_CHUNK : remaining;
             int r = httpd_req_recv(req, chunk, to_read);
             if (r <= 0) {
+                ok = false;
                 break;
             }
-            fwrite(chunk, 1, (size_t)r, f);
+            if (fwrite(chunk, 1, (size_t)r, f) != (size_t)r) {
+                ok = false;
+                break;
+            }
             remaining -= r;
         }
         fclose(f);
+        free(chunk);
         status_display_set_status(UI_READY);
+        if (!ok) {
+            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "write");
+            return ESP_FAIL;
+        }
         httpd_resp_set_status(req, "201 Created");
         return httpd_resp_send(req, NULL, 0);
     }
@@ -510,7 +616,11 @@ esp_err_t http_webdav_start(void)
     config.server_port = RNDISSTORAGE_HTTP_PORT;
     config.max_uri_handlers = 16;
     config.uri_match_fn = httpd_uri_match_wildcard;
-    config.stack_size = 8192;
+    config.stack_size = 12288;
+    config.recv_wait_timeout = 60;
+    config.send_wait_timeout = 60;
+    config.lru_purge_enable = true;
+    config.max_open_sockets = 7;
 
     ESP_RETURN_ON_ERROR(httpd_start(&s_server, &config), TAG, "httpd_start");
 
@@ -524,6 +634,7 @@ esp_err_t http_webdav_start(void)
         {.uri = "/api/rename", .method = HTTP_POST, .handler = h_rename},
         {.uri = "/api/download", .method = HTTP_GET, .handler = h_download},
         {.uri = "/api/upload", .method = HTTP_PUT, .handler = h_upload},
+        {.uri = "/api/pivot/probe", .method = HTTP_GET, .handler = h_pivot_probe},
         {.uri = "/dav", .method = HTTP_ANY, .handler = h_dav},
         {.uri = "/dav/*", .method = HTTP_ANY, .handler = h_dav},
     };

@@ -39,12 +39,13 @@ bool storage_begin(void)
 
     esp_vfs_fat_sdmmc_mount_config_t mount_config = {
         .format_if_mount_failed = false,
-        .max_files = 8,
-        .allocation_unit_size = 16 * 1024,
+        .max_files = 16,
+        .allocation_unit_size = 32 * 1024,
     };
 
     sdmmc_host_t host = SDMMC_HOST_DEFAULT();
-    host.max_freq_khz = SDMMC_FREQ_DEFAULT;
+    // 40 MHz HS; fall back to default if the card rejects it.
+    host.max_freq_khz = SDMMC_FREQ_HIGHSPEED;
 
     sdmmc_slot_config_t slot = SDMMC_SLOT_CONFIG_DEFAULT();
     slot.width = 4;
@@ -58,6 +59,11 @@ bool storage_begin(void)
 
     esp_err_t ret = esp_vfs_fat_sdmmc_mount(SD_MOUNT_POINT, &host, &slot, &mount_config, &s_card);
     if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "SD HS 4-bit failed (%s), retry default clock", esp_err_to_name(ret));
+        host.max_freq_khz = SDMMC_FREQ_DEFAULT;
+        ret = esp_vfs_fat_sdmmc_mount(SD_MOUNT_POINT, &host, &slot, &mount_config, &s_card);
+    }
+    if (ret != ESP_OK) {
         // Retry 1-bit
         slot.width = 1;
         ret = esp_vfs_fat_sdmmc_mount(SD_MOUNT_POINT, &host, &slot, &mount_config, &s_card);
@@ -68,7 +74,7 @@ bool storage_begin(void)
         return false;
     }
     s_mounted = true;
-    ESP_LOGI(TAG, "SD mounted at %s", SD_MOUNT_POINT);
+    ESP_LOGI(TAG, "SD mounted at %s (%d-bit, %d kHz)", SD_MOUNT_POINT, slot.width, host.max_freq_khz);
     return true;
 }
 

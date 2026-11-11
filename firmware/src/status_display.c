@@ -316,6 +316,10 @@ void status_display_set_status(ui_status_t status)
         return;
     }
     s_status = status;
+    // Full SPI framebuffer push blocks the HTTP worker; skip during transfers.
+    if (status == UI_TRANSFERRING) {
+        return;
+    }
     status_display_refresh();
 }
 
@@ -344,19 +348,19 @@ void status_display_refresh(void)
     fb_text(2, 14, "Status:", 0xFFFF);
     fb_text(50, 14, status_text(s_status), status_color(s_status));
 
-    char line[40];
-    snprintf(line, sizeof(line), "http://%s/", RNDISSTORAGE_IP_ADDR);
+    char line[48];
+    snprintf(line, sizeof(line), "USB %s", RNDISSTORAGE_IP_ADDR);
     fb_text(2, 26, line, 0xFFE0);
+    snprintf(line, sizeof(line), "AP  %s", RNDISSTORAGE_WIFI_IP_ADDR);
+    fb_text(2, 37, line, 0x07FF);
 
-    char tb[24], ub[24], fb[24];
+    char tb[16], ub[16], fr[16];
     format_bytes(s_total, tb, sizeof(tb));
     format_bytes(s_used, ub, sizeof(ub));
-    format_bytes(s_free, fb, sizeof(fb));
-    snprintf(line, sizeof(line), "Total:%s", tb);
-    fb_text(2, 41, line, 0xFFFF);
-    snprintf(line, sizeof(line), "Used: %s", ub);
+    format_bytes(s_free, fr, sizeof(fr));
+    snprintf(line, sizeof(line), "T:%s U:%s", tb, ub);
     fb_text(2, 52, line, 0xFFFF);
-    snprintf(line, sizeof(line), "Free: %s", fb);
+    snprintf(line, sizeof(line), "Free:%s", fr);
     fb_text(2, 63, line, 0xFFFF);
 
     tft_push_fb();

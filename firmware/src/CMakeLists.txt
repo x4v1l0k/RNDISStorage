@@ -5,6 +5,7 @@ idf_component_register(
         nvs_flash
         esp_netif
         esp_event
+        esp_wifi
         esp_http_server
         fatfs
         sdmmc

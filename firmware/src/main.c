@@ -1,8 +1,11 @@
 #include "board_config.h"
 #include "http_webdav.h"
+#include "net_pivot.h"
+#include "socks_proxy.h"
 #include "status_display.h"
 #include "storage.h"
 #include "usb_net.h"
+#include "wifi_ap.h"
 
 #include "driver/gpio.h"
 #include "esp_log.h"
@@ -63,8 +66,30 @@ void app_main(void)
         ESP_LOGI(TAG, "USB NCM ready");
     }
 
-    // Let Windows finish binding UsbNcm before SPI/SD traffic.
+    // Let Windows finish binding UsbNcm before SPI/SD/Wi-Fi traffic.
     vTaskDelay(pdMS_TO_TICKS(1500));
+
+    esp_err_t wifi_err = wifi_ap_start();
+    if (wifi_err != ESP_OK) {
+        ESP_LOGW(TAG, "SoftAP failed: %s — USB-only control still available", esp_err_to_name(wifi_err));
+    }
+
+    esp_err_t pivot_err = ESP_ERR_INVALID_STATE;
+    if (usb_err == ESP_OK && wifi_err == ESP_OK) {
+        pivot_err = net_pivot_start();
+        if (pivot_err != ESP_OK) {
+            ESP_LOGW(TAG, "pivot/NAPT failed: %s — SoftAP still serves UI, no host bridge",
+                     esp_err_to_name(pivot_err));
+        }
+    }
+
+    esp_err_t socks_err = ESP_FAIL;
+    if (wifi_err == ESP_OK) {
+        socks_err = socks_proxy_start();
+        if (socks_err != ESP_OK) {
+            ESP_LOGW(TAG, "SOCKS5 failed: %s", esp_err_to_name(socks_err));
+        }
+    }
 
     if (!status_display_begin()) {
         ESP_LOGW(TAG, "display init failed — continuing");
@@ -81,21 +106,28 @@ void app_main(void)
     } else {
         storage_info_t si = storage_info();
         status_display_set_storage(si.total_bytes, si.used_bytes, si.free_bytes);
-        status_display_set_backend("SD");
+        if (pivot_err == ESP_OK) {
+            status_display_set_backend("PIVOT");
+        } else if (wifi_err == ESP_OK) {
+            status_display_set_backend("SD+AP");
+        } else {
+            status_display_set_backend("SD");
+        }
     }
 
+    // HTTP binds all interfaces: USB NCM + SoftAP.
     esp_err_t http_err = ESP_FAIL;
-    if (usb_err == ESP_OK) {
+    if (usb_err == ESP_OK || wifi_err == ESP_OK) {
         http_err = http_webdav_start();
         if (http_err != ESP_OK) {
             ESP_LOGE(TAG, "HTTP failed: %s", esp_err_to_name(http_err));
         }
     }
 
-    if (usb_err == ESP_OK && http_err == ESP_OK && sd_ok) {
+    if (http_err == ESP_OK && sd_ok && (usb_err == ESP_OK || wifi_err == ESP_OK)) {
         status_display_set_status(UI_READY);
         led_rgb(0, 48, 0);
-    } else if (usb_err != ESP_OK) {
+    } else if (usb_err != ESP_OK && wifi_err != ESP_OK) {
         status_display_set_status(UI_FAILURE);
         led_rgb(64, 0, 0);
     } else {
@@ -103,8 +135,15 @@ void app_main(void)
         led_rgb(48, 24, 0);
     }
 
-    ESP_LOGI(TAG, "boot done USB=%s HTTP=%s SD=%s", esp_err_to_name(usb_err),
-             esp_err_to_name(http_err), sd_ok ? "OK" : "FAIL");
+    ESP_LOGI(TAG, "boot done USB=%s WiFi=%s pivot=%s HTTP=%s SD=%s", esp_err_to_name(usb_err),
+             esp_err_to_name(wifi_err), esp_err_to_name(pivot_err), esp_err_to_name(http_err),
+             sd_ok ? "OK" : "FAIL");
+    if (socks_err == ESP_OK) {
+        ESP_LOGI(TAG, "operator: SoftAP → curl --socks5 %s:%d http://%s:1234/", RNDISSTORAGE_WIFI_IP_ADDR,
+                 RNDISSTORAGE_SOCKS_PORT, RNDISSTORAGE_HOST_IP_ADDR);
+    } else if (pivot_err == ESP_OK) {
+        ESP_LOGI(TAG, "operator: join SoftAP → ssh user@%s  (host USB IP)", RNDISSTORAGE_HOST_IP_ADDR);
+    }
 
     bool last_btn = true;
     while (1) {

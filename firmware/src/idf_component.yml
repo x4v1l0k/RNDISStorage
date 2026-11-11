@@ -1,3 +1,8 @@
+# Local paths avoid Windows PermissionError when the component manager
+# tries to rmtree/re-copy managed_components (AV/indexer locks).
 dependencies:
   idf: ">=5.0"
-  espressif/esp_tinyusb: "~1.4.4"
+  espressif/esp_tinyusb:
+    path: ../managed_components/espressif__esp_tinyusb
+  espressif/tinyusb:
+    path: ../managed_components/espressif__tinyusb

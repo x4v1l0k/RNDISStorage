@@ -29,7 +29,8 @@ static void l2_free(void *h, void *buffer)
 static esp_err_t netif_transmit(void *h, void *buffer, size_t len)
 {
     (void)h;
-    if (tinyusb_net_send_sync(buffer, (uint16_t)len, NULL, pdMS_TO_TICKS(100)) != ESP_OK) {
+    // Forwarded SoftAP→host traffic needs a longer USB TX wait than local HTTP.
+    if (tinyusb_net_send_sync(buffer, (uint16_t)len, NULL, pdMS_TO_TICKS(500)) != ESP_OK) {
         return ESP_FAIL;
     }
     return ESP_OK;
@@ -88,7 +89,9 @@ esp_err_t usb_net_start(void)
 
     esp_netif_ip_info_t ip_info = {0};
     IP4_ADDR(&ip_info.ip, 203, 0, 113, 1);
-    IP4_ADDR(&ip_info.gw, 203, 0, 113, 1);
+    // Do NOT advertise ESP as a default gateway on USB — Windows was installing
+    // 0.0.0.0/0 via 203.0.113.1 (metric 0) and breaking host routing.
+    IP4_ADDR(&ip_info.gw, 0, 0, 0, 0);
     IP4_ADDR(&ip_info.netmask, 255, 255, 255, 0);
 
     static esp_netif_inherent_config_t base_cfg = {
@@ -97,7 +100,8 @@ esp_err_t usb_net_start(void)
         .lost_ip_event = 0,
         .if_key = "USB_NCM",
         .if_desc = "usb-ncm",
-        .route_prio = 10,
+        // Higher than SoftAP (10) so USB stays the NAPT upstream / default route.
+        .route_prio = 100,
     };
     base_cfg.ip_info = &ip_info;
 
@@ -126,7 +130,31 @@ esp_err_t usb_net_start(void)
     uint8_t lwip_mac[6] = {0x02, 0x00, 0x00, 0x71, 0x13, 0x02};
     esp_netif_set_mac(s_netif, lwip_mac);
     esp_netif_action_start(s_netif, NULL, 0, NULL);
+    // Mark link up so ARP/forwarding treat USB as a live uplink.
+    esp_netif_action_connected(s_netif, NULL, 0, NULL);
+    esp_netif_set_default_netif(s_netif);
 
-    ESP_LOGI(TAG, "USB NCM up — http://%s/", RNDISSTORAGE_IP_ADDR);
+    // Explicitly disable DHCP "router" option on USB (connected route only).
+    uint8_t no_router = 0;
+    esp_err_t opt_err = esp_netif_dhcps_option(s_netif, ESP_NETIF_OP_SET, ESP_NETIF_ROUTER_SOLICITATION_ADDRESS,
+                                               &no_router, sizeof(no_router));
+    if (opt_err != ESP_OK) {
+        // Option must be set while DHCP server stopped on some IDF versions.
+        esp_netif_dhcps_stop(s_netif);
+        opt_err = esp_netif_dhcps_option(s_netif, ESP_NETIF_OP_SET, ESP_NETIF_ROUTER_SOLICITATION_ADDRESS, &no_router,
+                                         sizeof(no_router));
+        esp_netif_dhcps_start(s_netif);
+    }
+    if (opt_err != ESP_OK) {
+        ESP_LOGW(TAG, "USB DHCP disable-router: %s", esp_err_to_name(opt_err));
+    }
+
+    ESP_LOGI(TAG, "USB NCM up — http://%s/ (host DHCP typically %s, no default GW)", RNDISSTORAGE_IP_ADDR,
+             RNDISSTORAGE_HOST_IP_ADDR);
     return ESP_OK;
+}
+
+esp_netif_t *usb_net_netif(void)
+{
+    return s_netif;
 }
