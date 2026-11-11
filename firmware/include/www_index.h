@@ -7,12 +7,12 @@ static const char WWW_INDEX_HTML[] = R"INDEXHTML(
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>RNDISStorage</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23141a22'/%3E%3Cpath fill='%233aa89a' d='M8 10h12a3 3 0 0 1 3 3v2h2v6h-2v2a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3V13a3 3 0 0 1 3-3zm0 2a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2h-3v-6h3v-2a1 1 0 0 0-1-1H8zm11 4v2h2v-2h-2z'/%3E%3C/svg%3E"/>
 <style>
 :root{
   --bg:#0e1116;--surface:#171d27;--elev:#222b38;--border:#2c3645;
   --text:#e8eef5;--muted:#8b97a8;--dim:#667384;--accent:#3aa89a;
-  --accent-dim:#2a7d73;--danger:#d97868;--ok:#6fbf8a;--warn:#d4a84b;
-  --select:#2a5f58;--tree:#121820;
+  --danger:#d97868;--ok:#6fbf8a;--warn:#d4a84b;--select:#2a5f58;
 }
 *{box-sizing:border-box}
 body{margin:0;font-family:"Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
@@ -22,33 +22,59 @@ header{display:flex;align-items:center;justify-content:space-between;padding:14p
 .pill{background:var(--elev);color:var(--muted);padding:6px 12px;border-radius:4px;font-size:.8rem;font-weight:600}
 .strip{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:12px 16px;background:var(--surface);border-bottom:1px solid var(--border)}
 .path{flex:1;min-width:180px;background:#1a222e;border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:4px;font-family:Consolas,monospace;font-size:.9rem}
-button,.btn{background:#243041;color:var(--text);border:0;padding:8px 12px;border-radius:4px;cursor:pointer;font-size:.85rem}
+button{background:#243041;color:var(--text);border:0;padding:8px 12px;border-radius:4px;cursor:pointer;font-size:.85rem}
 button.primary{background:var(--accent);color:#0b1210;font-weight:600}
+button.small{padding:4px 8px;font-size:.75rem}
 button:hover{filter:brightness(1.08)}
 button:disabled{opacity:.45;cursor:not-allowed}
-main{padding:12px 16px 24px}
-.panel{background:var(--surface);border:1px solid var(--border);border-radius:6px;overflow:hidden}
+main{padding:12px 16px 24px;display:grid;gap:14px;grid-template-columns:1fr}
+@media(min-width:960px){main{grid-template-columns:1.4fr 1fr}}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:6px;overflow:hidden;min-width:0}
 .toolbar{display:flex;gap:6px;flex-wrap:wrap;padding:10px;background:#1a222e;border-bottom:1px solid var(--border)}
+.panel-title{padding:10px 12px;background:#1a222e;border-bottom:1px solid var(--border);font-weight:600;display:flex;justify-content:space-between;align-items:center;gap:8px}
 table{width:100%;border-collapse:collapse;font-size:.9rem}
-th{text-align:left;padding:10px 12px;background:#1a222e;color:#9aa8ba;font-weight:600;border-bottom:1px solid var(--border);user-select:none}
-td{padding:9px 12px;border-bottom:1px solid #243041;cursor:default}
+th{text-align:left;padding:10px 12px;background:#1a222e;color:#9aa8ba;font-weight:600;border-bottom:1px solid var(--border)}
+td{padding:9px 12px;border-bottom:1px solid #243041}
 tr:hover td{background:#1c2430}
 tr.selected td{background:var(--select)}
+#rows tr{user-select:none;cursor:default}
 .name{font-family:Consolas,"Cascadia Mono",monospace}
 .icon{width:1.4em;display:inline-block;color:var(--accent)}
 .muted{color:var(--muted)}
 .footer{padding:10px 16px;color:var(--muted);font-size:.8rem;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
-#log{margin:12px 16px;background:#0c1016;border:1px solid var(--border);border-radius:6px;padding:10px;height:110px;overflow:auto;font-family:Consolas,monospace;font-size:.78rem;color:#a8b4c4}
+#log{margin:0 16px 16px;background:#0c1016;border:1px solid var(--border);border-radius:6px;padding:10px;height:90px;overflow:auto;font-family:Consolas,monospace;font-size:.78rem;color:#a8b4c4;white-space:pre-wrap;word-break:break-word}
 .drop{outline:2px dashed var(--accent);outline-offset:-6px}
 #toast{position:fixed;bottom:20px;right:20px;background:var(--elev);border:1px solid var(--border);padding:10px 14px;border-radius:6px;display:none;z-index:9}
 input[type=file]{display:none}
+#queueList{max-height:420px;overflow:auto;padding:8px}
+.q-empty{padding:18px 12px;color:var(--muted);font-size:.9rem}
+.q-item{border:1px solid var(--border);border-radius:6px;padding:10px;margin-bottom:8px;background:#121820}
+.q-top{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+.q-name{font-family:Consolas,monospace;font-size:.82rem;word-break:break-all}
+.q-meta{display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:6px;font-size:.78rem;color:var(--muted)}
+.q-bar{height:8px;background:#243041;border-radius:4px;overflow:hidden;margin-top:8px}
+.q-bar>i{display:block;height:100%;width:0;background:var(--accent);transition:width .15s linear}
+.q-actions{display:flex;gap:4px;flex-shrink:0}
+.badge{font-size:.7rem;padding:2px 6px;border-radius:3px;background:var(--elev);text-transform:uppercase;letter-spacing:.04em}
+.badge.up{color:var(--accent)}.badge.down{color:#7eb6ff}
+.badge.run{color:var(--ok)}.badge.wait{color:var(--muted)}.badge.pause{color:var(--warn)}
+.badge.err{color:var(--danger)}.badge.done{color:var(--ok)}.badge.cancel{color:var(--dim)}
+#viewer{display:none;position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:20;padding:24px;align-items:center;justify-content:center}
+#viewer.open{display:flex}
+.viewer-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;width:min(960px,100%);max-height:90vh;display:flex;flex-direction:column;overflow:hidden}
+.viewer-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;background:#1a222e;border-bottom:1px solid var(--border)}
+.viewer-title{font-family:Consolas,monospace;font-size:.85rem;word-break:break-all}
+.viewer-body{padding:12px;overflow:auto;min-height:120px;background:#0c1016}
+.viewer-body pre{margin:0;white-space:pre-wrap;word-break:break-word;font-family:Consolas,monospace;font-size:.82rem;color:#d5dde8}
+.viewer-body img{max-width:100%;height:auto;display:block;margin:0 auto}
+.viewer-meta{padding:8px 12px;border-top:1px solid var(--border);color:var(--muted);font-size:.75rem}
 </style>
 </head>
 <body>
 <header>
   <div>
     <div class="brand">RNDISStorage</div>
-    <div class="tag">WebDAV file explorer · lab PoC · no USB Mass Storage</div>
+    <div class="tag">Plug&amp;Play WebDAV explorer · no USB Mass Storage</div>
   </div>
   <div class="pill" id="connPill">Connecting…</div>
 </header>
@@ -64,48 +90,92 @@ input[type=file]{display:none}
     <div class="toolbar">
       <button type="button" id="btnMkdir">New folder</button>
       <button type="button" id="btnTouch">New file</button>
-      <button type="button" id="btnUpload">Upload</button>
+      <button type="button" id="btnUpload">Upload files</button>
+      <button type="button" id="btnUploadFolder">Upload folder</button>
+      <button type="button" id="btnView" disabled>View</button>
       <button type="button" id="btnDownload" disabled>Download</button>
       <button type="button" id="btnRename" disabled>Rename</button>
       <button type="button" id="btnDelete" disabled>Delete</button>
       <input type="file" id="fileInput" multiple/>
+      <input type="file" id="folderInput" webkitdirectory directory multiple/>
     </div>
     <table>
       <thead><tr><th style="width:44%">Name</th><th style="width:12%">Type</th><th style="width:16%">Size</th><th>Modified</th></tr></thead>
       <tbody id="rows"></tbody>
     </table>
   </div>
+  <div class="panel">
+    <div class="panel-title">
+      <span>Transfer queue</span>
+      <span style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <label class="muted" style="font-weight:500;font-size:.8rem">Parallel
+          <select id="parallelSelect" style="margin-left:4px;background:#243041;color:var(--text);border:1px solid var(--border);border-radius:4px;padding:3px 6px">
+            <option value="1">1</option>
+            <option value="2" selected>2</option>
+            <option value="4">4</option>
+          </select>
+        </label>
+        <span class="muted" id="queueSummary">0 active</span>
+      </span>
+    </div>
+    <div id="queueList"><div class="q-empty">No transfers yet. Uploads and downloads stay non-blocking.</div></div>
+  </div>
 </main>
 <div class="footer">
   <span id="status">Ready</span>
-  <span id="davHint">WebDAV: <code id="davUrl"></code></span>
+  <span>WebDAV: <code id="davUrl"></code></span>
 </div>
 <div id="log"></div>
 <div id="toast"></div>
+<div id="viewer" role="dialog" aria-modal="true">
+  <div class="viewer-card">
+    <div class="viewer-head">
+      <div class="viewer-title" id="viewerTitle">—</div>
+      <div style="display:flex;gap:6px">
+        <button type="button" class="small" id="btnViewerDownload">Download</button>
+        <button type="button" class="small" id="btnViewerClose">Close</button>
+      </div>
+    </div>
+    <div class="viewer-body" id="viewerBody"></div>
+    <div class="viewer-meta" id="viewerMeta"></div>
+  </div>
+</div>
 <script>
 const $ = (id) => document.getElementById(id);
 let cwd = "/";
-let selected = null;
+let selected = new Set(); /* multi-select names */
+let lastClicked = null;
 let entries = [];
+/* Default 2: good speed/stability on ESP32-S3 + SDMMC. Selector can raise to 4. */
+let maxParallel = 2;
+let _refreshTimer = 0;
+function refreshSoon() {
+  clearTimeout(_refreshTimer);
+  _refreshTimer = setTimeout(() => refresh(), 400);
+}
 
 function log(msg) {
   const el = $("log");
-  const t = new Date().toLocaleTimeString();
-  el.textContent += `[${t}] ${msg}\n`;
+  el.textContent += `[${new Date().toLocaleTimeString()}] ${msg}\n`;
   el.scrollTop = el.scrollHeight;
 }
 function toast(msg) {
   const el = $("toast");
   el.textContent = msg;
   el.style.display = "block";
-  setTimeout(() => el.style.display = "none", 2200);
+  setTimeout(() => { el.style.display = "none"; }, 2200);
 }
 function fmtSize(n) {
-  if (n == null) return "—";
+  if (n == null || isNaN(n)) return "—";
   n = Number(n);
-  if (n < 1024) return n + " B";
-  if (n < 1048576) return (n/1024).toFixed(1) + " KB";
-  return (n/1048576).toFixed(2) + " MB";
+  const u = ["B","KB","MB","GB"];
+  let i = 0;
+  while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+  return (i === 0 ? n : n.toFixed(n < 10 ? 2 : 1)) + " " + u[i];
+}
+function fmtSpeed(bps) {
+  if (!bps || bps < 1) return "—";
+  return fmtSize(bps) + "/s";
 }
 function joinPath(base, name) {
   if (!base || base === "/") return "/" + name.replace(/^\/+/, "");
@@ -116,6 +186,16 @@ function parentPath(p) {
   const parts = p.replace(/\/+$/, "").split("/");
   parts.pop();
   return parts.join("/") || "/";
+}
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+/** Header values must be ISO-8859-1; percent-encode UTF-8 paths (firmware url-decodes). */
+function encodeHeaderPath(remote) {
+  return encodeURIComponent(remote || "/");
+}
+function pathHeaders(remote, extra = {}) {
+  return Object.assign({ "X-Rndis-Path": encodeHeaderPath(remote) }, extra);
 }
 async function api(path, opts = {}) {
   const res = await fetch(path, opts);
@@ -129,45 +209,420 @@ async function api(path, opts = {}) {
   }
   return body;
 }
-function setSelection(name) {
-  selected = name;
-  document.querySelectorAll("#rows tr").forEach(tr => {
-    tr.classList.toggle("selected", tr.dataset.name === name);
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+function isRetryable(err) {
+  const m = String((err && err.message) || err || "").toLowerCase();
+  return m.includes("network") || m.includes("oom") || m.includes("recv") ||
+    m.includes("failed to fetch") || m.includes("timeout");
+}
+async function ensureRemoteDir(remote) {
+  try {
+    await api("/api/mkdir", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: remote })
+    });
+  } catch (_) {}
+}
+async function remoteSize(path) {
+  try {
+    const s = await api("/api/stat", { headers: pathHeaders(path) });
+    return s.exists && !s.is_dir ? Number(s.size || 0) : 0;
+  } catch (_) { return 0; }
+}
+
+/* ---------- Transfer queue ---------- */
+const Queue = {
+  items: [],
+  _id: 1,
+  addUpload(file, remote, label, opts = {}) {
+    const t = {
+      id: this._id++, kind: "upload", name: label || file.name, remote,
+      file, total: file.size || 0, done: 0, speed: 0, status: "queued",
+      error: "", xhr: null, abort: null, parts: null, _t0: 0, _d0: 0
+    };
+    this.items.unshift(t);
+    if (!opts.silent) {
+      this.render();
+      this.pump();
+    }
+    return t;
+  },
+  addDownload(remote, filename, totalHint, opts = {}) {
+    const t = {
+      id: this._id++, kind: "download", name: filename, remote,
+      file: null, total: totalHint || 0, done: 0, speed: 0, status: "queued",
+      error: "", xhr: null, abort: null, parts: [], _t0: 0, _d0: 0
+    };
+    this.items.unshift(t);
+    if (!opts.silent) {
+      this.render();
+      this.pump();
+    }
+    return t;
+  },
+  flush() {
+    this.render();
+    this.pump();
+  },
+  activeCount() {
+    return this.items.filter(t => t.status === "running").length;
+  },
+  pump() {
+    const slots = maxParallel - this.activeCount();
+    if (slots <= 0) return;
+    const queued = this.items.filter(t => t.status === "queued").slice(0, slots);
+    for (const t of queued) {
+      t.status = "running";
+      t.error = "";
+      t._t0 = performance.now();
+      t._d0 = t.done;
+      void this._run(t);
+    }
+    if (queued.length) this.render();
+  },
+  async _run(t) {
+    const maxAttempts = 3;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      if (t.status === "paused" || t.status === "cancelled") break;
+      t.status = "running";
+      t.error = "";
+      t._t0 = performance.now();
+      t._d0 = t.done;
+      this.render();
+      try {
+        if (t.kind === "upload") await this.runUpload(t);
+        else await this.runDownload(t);
+        if (t.status === "running") {
+          t.status = "done";
+          t.speed = 0;
+          t.done = t.total || t.done;
+          log((t.kind === "upload" ? "uploaded " : "downloaded ") + t.remote);
+          if (t.kind === "upload") refreshSoon();
+        }
+        break;
+      } catch (err) {
+        if (t.status === "paused" || t.status === "cancelled") break;
+        const msg = err.message || String(err);
+        if (attempt < maxAttempts && isRetryable(err)) {
+          log(t.name + ": " + msg + " — retry " + attempt + "/" + (maxAttempts - 1));
+          if (t.kind === "upload") t.done = await remoteSize(t.remote);
+          await sleep(400 * attempt);
+          continue;
+        }
+        t.status = "error";
+        t.error = msg;
+        t.speed = 0;
+        log(t.name + ": " + t.error);
+      }
+    }
+    this.render();
+    this.pump();
+  },
+  _stopTransfer(t) {
+    if (t.xhr) {
+      try { t.xhr.abort(); } catch (_) {}
+      t.xhr = null;
+    }
+    if (t.reader) {
+      try { t.reader.cancel(); } catch (_) {}
+      t.reader = null;
+    }
+    if (t.abort) {
+      try { t.abort.abort(); } catch (_) {}
+    }
+  },
+  markProgress(t, done) {
+    t.done = done;
+    const dt = (performance.now() - t._t0) / 1000;
+    if (dt > 0.2) t.speed = (t.done - t._d0) / dt;
+    /* In-place progress update — full re-render steals Pause/Cancel clicks. */
+    if (!this._raf) this._raf = requestAnimationFrame(() => { this._raf = 0; this.renderProgress(); });
+  },
+  renderProgress() {
+    const running = this.items.filter(t => t.status === "running").length;
+    const queued = this.items.filter(t => t.status === "queued").length;
+    $("queueSummary").textContent = running + " running · " + queued + " queued · " + this.items.length + " total";
+    for (const t of this.items) {
+      const el = document.querySelector('#queueList .q-item[data-id="' + t.id + '"]');
+      if (!el) continue;
+      const pct = t.total > 0 ? Math.min(100, Math.round(t.done * 100 / t.total)) : (t.status === "done" ? 100 : 0);
+      const bar = el.querySelector(".q-bar > i");
+      if (bar) bar.style.width = pct + "%";
+      const meta = el.querySelector(".q-meta");
+      if (meta) {
+        meta.innerHTML = `<span>${fmtSize(t.done)} / ${fmtSize(t.total)}</span><span>${pct}%</span><span>${fmtSpeed(t.speed)}</span>` +
+          (t.error ? `<span style="color:var(--danger)">${escapeHtml(t.error)}</span>` : "");
+      }
+    }
+  },
+  async runUpload(t) {
+    let offset = t.done || 0;
+    if (offset > 0) {
+      offset = await remoteSize(t.remote);
+      t.done = offset;
+    }
+    if (t.status !== "running") throw new Error("aborted");
+    if (offset >= t.total && t.total > 0) return;
+    const blob = offset > 0 ? t.file.slice(offset) : t.file;
+    await new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      t.xhr = xhr;
+      const url = "/api/upload" + (offset ? ("?offset=" + offset) : "");
+      xhr.open("PUT", url);
+      xhr.setRequestHeader("Content-Type", "application/octet-stream");
+      xhr.setRequestHeader("X-Rndis-Path", encodeHeaderPath(t.remote));
+      xhr.upload.onprogress = (ev) => {
+        if (!ev.lengthComputable) return;
+        this.markProgress(t, offset + ev.loaded);
+      };
+      xhr.onload = () => {
+        t.xhr = null;
+        if (xhr.status >= 200 && xhr.status < 300) {
+          t.done = t.total;
+          resolve();
+        } else {
+          let msg = "upload failed";
+          try { msg = JSON.parse(xhr.responseText).message || msg; } catch (_) {}
+          reject(new Error(msg));
+        }
+      };
+      xhr.onerror = () => { t.xhr = null; reject(new Error("network error")); };
+      xhr.onabort = () => { t.xhr = null; reject(new Error("aborted")); };
+      xhr.send(blob);
+    });
+  },
+  async runDownload(t) {
+    const ctrl = new AbortController();
+    t.abort = ctrl;
+    t.reader = null;
+    const headers = pathHeaders(t.remote);
+    if (t.done > 0) headers["Range"] = "bytes=" + t.done + "-";
+    const url = "/api/download?path=" + encodeURIComponent(t.remote);
+    let res;
+    try {
+      res = await fetch(url, { headers, signal: ctrl.signal });
+    } catch (err) {
+      if (t.status === "paused" || t.status === "cancelled" || ctrl.signal.aborted) {
+        throw new Error("aborted");
+      }
+      throw err;
+    }
+    if (t.status !== "running") throw new Error("aborted");
+    if (!res.ok && res.status !== 206) {
+      let msg = "download failed (HTTP " + res.status + ")";
+      try {
+        const j = await res.json();
+        msg = j.message || j.error || msg;
+      } catch (_) {
+        try { msg = (await res.text()).slice(0, 160) || msg; } catch (__) {}
+      }
+      throw new Error(msg);
+    }
+    const cl = res.headers.get("Content-Length");
+    const cr = res.headers.get("Content-Range");
+    if (cr) {
+      const m = /\/(\d+)$/.exec(cr);
+      if (m) t.total = Number(m[1]);
+    } else if (cl) {
+      t.total = t.done + Number(cl);
+    }
+    if (!res.body) throw new Error("download failed: empty body");
+    const reader = res.body.getReader();
+    t.reader = reader;
+    try {
+      for (;;) {
+        if (t.status === "paused" || t.status === "cancelled" || ctrl.signal.aborted) {
+          throw new Error("aborted");
+        }
+        const { done, value } = await reader.read();
+        if (done) break;
+        t.parts.push(value);
+        this.markProgress(t, t.done + value.byteLength);
+      }
+    } finally {
+      t.reader = null;
+    }
+    t.abort = null;
+    if (t.status !== "running") throw new Error("aborted");
+    const blob = new Blob(t.parts, { type: "application/octet-stream" });
+    t.parts = [blob];
+    t.done = t.done || blob.size;
+    if (t.total < t.done) t.total = t.done;
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = t.name || "download";
+    a.rel = "noopener";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  },
+  pause(id) {
+    const t = this.items.find(x => x.id === id);
+    if (!t || t.status !== "running") return;
+    t.status = "paused";
+    t.speed = 0;
+    this._stopTransfer(t);
+    this.render();
+    this.pump();
+  },
+  async resume(id) {
+    const t = this.items.find(x => x.id === id);
+    if (!t || (t.status !== "paused" && t.status !== "error" && t.status !== "cancelled")) return;
+    if (t.kind === "upload") {
+      t.done = await remoteSize(t.remote);
+    }
+    if (t.status === "cancelled" && t.kind === "download") {
+      t.parts = [];
+      t.done = 0;
+    }
+    t.status = "queued";
+    t.error = "";
+    this.render();
+    this.pump();
+  },
+  cancel(id) {
+    const t = this.items.find(x => x.id === id);
+    if (!t || t.status === "done") return;
+    t.status = "cancelled";
+    t.speed = 0;
+    this._stopTransfer(t);
+    this.render();
+    this.pump();
+  },
+  clearDone() {
+    this.items = this.items.filter(t => t.status !== "done" && t.status !== "cancelled");
+    this.render();
+  },
+  render() {
+    const box = $("queueList");
+    const running = this.items.filter(t => t.status === "running").length;
+    const queued = this.items.filter(t => t.status === "queued").length;
+    $("queueSummary").textContent = running + " running · " + queued + " queued · " + this.items.length + " total";
+    if (!this.items.length) {
+      box.innerHTML = '<div class="q-empty">No transfers yet. Uploads and downloads stay non-blocking.</div>';
+      return;
+    }
+    box.innerHTML = this.items.map(t => {
+      const pct = t.total > 0 ? Math.min(100, Math.round(t.done * 100 / t.total)) : (t.status === "done" ? 100 : 0);
+      const canPause = t.status === "running";
+      const canResume = t.status === "paused" || t.status === "error" || t.status === "cancelled";
+      const canCancel = t.status === "running" || t.status === "queued" || t.status === "paused" || t.status === "error";
+      return `<div class="q-item" data-id="${t.id}">
+        <div class="q-top">
+          <div>
+            <span class="badge ${t.kind === "upload" ? "up" : "down"}">${t.kind === "upload" ? "↑ up" : "↓ down"}</span>
+            <span class="badge ${t.status === "running" ? "run" : t.status === "queued" ? "wait" : t.status === "paused" ? "pause" : t.status === "error" ? "err" : t.status === "done" ? "done" : "cancel"}">${t.status}</span>
+            <div class="q-name">${escapeHtml(t.name)}</div>
+          </div>
+          <div class="q-actions">
+            <button type="button" class="small" data-act="pause" ${canPause ? "" : "disabled"}>Pause</button>
+            <button type="button" class="small" data-act="resume" ${canResume ? "" : "disabled"}>Resume</button>
+            <button type="button" class="small" data-act="cancel" ${canCancel ? "" : "disabled"}>Cancel</button>
+          </div>
+        </div>
+        <div class="q-bar"><i style="width:${pct}%"></i></div>
+        <div class="q-meta">
+          <span>${fmtSize(t.done)} / ${fmtSize(t.total)}</span>
+          <span>${pct}%</span>
+          <span>${fmtSpeed(t.speed)}</span>
+          ${t.error ? `<span style="color:var(--danger)">${escapeHtml(t.error)}</span>` : ""}
+        </div>
+      </div>`;
+    }).join("") + `<div style="padding:4px 2px"><button type="button" class="small" data-act="clear">Clear finished</button></div>`;
+  }
+};
+/* Event delegation survives progress updates (buttons stay clickable). */
+$("queueList").addEventListener("click", (ev) => {
+  const btn = ev.target.closest("[data-act]");
+  if (!btn || btn.disabled) return;
+  const act = btn.dataset.act;
+  if (act === "clear") { Queue.clearDone(); return; }
+  const item = btn.closest(".q-item");
+  if (!item) return;
+  const id = Number(item.dataset.id);
+  if (act === "pause") Queue.pause(id);
+  else if (act === "resume") void Queue.resume(id);
+  else if (act === "cancel") Queue.cancel(id);
+});
+
+function selectedNames() {
+  return entries.map(e => e.name).filter(n => selected.has(n));
+}
+function updateSelectionUi() {
+  const names = selectedNames();
+  document.querySelectorAll("#rows tr[data-name]").forEach(tr => {
+    tr.classList.toggle("selected", selected.has(tr.dataset.name));
   });
-  const has = !!name;
-  $("btnDownload").disabled = !has || (entries.find(e => e.name === name) || {}).is_dir;
-  $("btnRename").disabled = !has;
-  $("btnDelete").disabled = !has;
+  const n = names.length;
+  const one = n === 1 ? entries.find(e => e.name === names[0]) : null;
+  const oneFile = !!(one && !one.is_dir);
+  $("btnView").disabled = !(oneFile && canPreview(names[0]));
+  $("btnDownload").disabled = n === 0;
+  $("btnDelete").disabled = n === 0;
+  $("btnRename").disabled = n !== 1;
+  $("btnDownload").textContent = n > 1 ? ("Download (" + n + ")") : "Download";
+  $("btnDelete").textContent = n > 1 ? ("Delete (" + n + ")") : "Delete";
+}
+function clearSelection() {
+  selected.clear();
+  lastClicked = null;
+  updateSelectionUi();
+}
+function onRowClick(e, name, ev) {
+  const names = entries.map(x => x.name);
+  const idx = names.indexOf(name);
+  if (ev.shiftKey && lastClicked && names.includes(lastClicked)) {
+    const a = names.indexOf(lastClicked);
+    const from = Math.min(a, idx);
+    const to = Math.max(a, idx);
+    if (!ev.ctrlKey && !ev.metaKey) selected.clear();
+    for (let i = from; i <= to; i++) selected.add(names[i]);
+  } else if (ev.ctrlKey || ev.metaKey) {
+    if (selected.has(name)) selected.delete(name);
+    else selected.add(name);
+    lastClicked = name;
+  } else {
+    selected.clear();
+    selected.add(name);
+    lastClicked = name;
+  }
+  updateSelectionUi();
 }
 function render() {
   $("pathInput").value = cwd;
   const tb = $("rows");
   tb.innerHTML = "";
+  /* Drop selection entries that disappeared after refresh. */
+  for (const n of Array.from(selected)) {
+    if (!entries.some(e => e.name === n)) selected.delete(n);
+  }
   if (cwd !== "/") {
     const tr = document.createElement("tr");
     tr.innerHTML = `<td class="name"><span class="icon">⬆</span> ..</td><td class="muted">dir</td><td></td><td></td>`;
-    tr.onclick = () => { cwd = parentPath(cwd); refresh(); };
+    tr.onclick = () => { clearSelection(); cwd = parentPath(cwd); refresh(); };
     tb.appendChild(tr);
   }
   for (const e of entries) {
     const tr = document.createElement("tr");
     tr.dataset.name = e.name;
-    const icon = e.is_dir ? "📁" : "📄";
-    tr.innerHTML = `<td class="name"><span class="icon">${icon}</span> ${escapeHtml(e.name)}</td>
+    tr.innerHTML = `<td class="name"><span class="icon">${e.is_dir ? "📁" : "📄"}</span> ${escapeHtml(e.name)}</td>
       <td class="muted">${e.is_dir ? "dir" : "file"}</td>
       <td>${e.is_dir ? "—" : fmtSize(e.size)}</td>
       <td class="muted">${e.mtime || "—"}</td>`;
-    tr.onclick = () => setSelection(e.name);
+    tr.onclick = (ev) => onRowClick(e, e.name, ev);
     tr.ondblclick = () => {
-      if (e.is_dir) { cwd = joinPath(cwd, e.name); refresh(); }
-      else downloadOne(e.name);
+      if (e.is_dir) { clearSelection(); cwd = joinPath(cwd, e.name); refresh(); }
+      else {
+        selected.clear(); selected.add(e.name); lastClicked = e.name; updateSelectionUi();
+        if (canPreview(e.name)) openViewer(e.name);
+        else toast("No preview for this type — use Download");
+      }
     };
     tb.appendChild(tr);
   }
-  setSelection(null);
-}
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  updateSelectionUi();
 }
 async function refreshInfo() {
   try {
@@ -175,31 +630,16 @@ async function refreshInfo() {
     $("connPill").textContent = "Online · " + (info.transport || "network");
     $("connPill").style.color = "var(--ok)";
     const st = info.storage || {};
-    if (st.mounted === false) {
-      $("storageLabel").textContent = "SD not mounted";
-      $("connPill").textContent = "Online · no SD";
-      $("connPill").style.color = "var(--warn)";
-    } else {
-      $("storageLabel").textContent =
-        `SD ${fmtSize(st.used_bytes)} / ${fmtSize(st.total_bytes)} · free ${fmtSize(st.free_bytes)}`;
-    }
+    $("storageLabel").textContent =
+      `SD ${fmtSize(st.used_bytes)} / ${fmtSize(st.total_bytes)} · free ${fmtSize(st.free_bytes)}`;
     $("davUrl").textContent = location.origin + "/dav/";
-    return info;
   } catch (err) {
     $("connPill").textContent = "Offline";
     $("connPill").style.color = "var(--danger)";
-    throw err;
   }
 }
 async function refresh() {
   $("status").textContent = "Listing…";
-  try {
-    await refreshInfo();
-  } catch (err) {
-    $("status").textContent = "API unreachable: " + (err.message || err);
-    log("info error: " + err.message);
-    return;
-  }
   try {
     const data = await api("/api/list?path=" + encodeURIComponent(cwd));
     entries = (data.entries || []).sort((a,b) => {
@@ -208,34 +648,67 @@ async function refresh() {
     });
     render();
     $("status").textContent = entries.length + " item(s)";
+    refreshInfo();
   } catch (err) {
-    entries = [];
-    render();
     $("status").textContent = String(err.message || err);
     log("list error: " + err.message);
   }
 }
-async function downloadOne(name) {
-  const remote = joinPath(cwd, name);
-  $("status").textContent = "Downloading " + name;
-  try {
-    const res = await fetch("/api/download?path=" + encodeURIComponent(remote));
-    if (!res.ok) throw new Error("download failed");
-    const blob = await res.blob();
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = name;
-    a.click();
-    URL.revokeObjectURL(a.href);
-    log("downloaded " + remote);
-    $("status").textContent = "Downloaded " + name;
-  } catch (err) {
-    toast(err.message); log(err.message);
+
+async function ensureParents(remote) {
+  const parts = remote.split("/");
+  let cur = "";
+  for (let i = 1; i < parts.length - 1; i++) {
+    cur += "/" + parts[i];
+    await ensureRemoteDir(cur);
   }
 }
-$("btnUp").onclick = () => { cwd = parentPath(cwd); refresh(); };
+async function enqueueUpload(file, remote, opts = {}) {
+  await ensureParents(remote);
+  Queue.addUpload(file, remote, file.webkitRelativePath || file.name, opts);
+}
+async function enqueueUploads(fileEntries) {
+  /* Prepare dirs first, then queue all tasks and pump once → true parallelism. */
+  for (const { file, remote } of fileEntries) await ensureParents(remote);
+  for (const { file, remote } of fileEntries) {
+    Queue.addUpload(file, remote, file.webkitRelativePath || file.name, { silent: true });
+  }
+  Queue.flush();
+}
+async function collectTree(remote) {
+  const data = await api("/api/list?path=" + encodeURIComponent(remote));
+  const files = [];
+  for (const e of (data.entries || [])) {
+    const child = joinPath(remote, e.name);
+    if (e.is_dir) files.push(...await collectTree(child));
+    else files.push({ path: child, name: e.name, size: Number(e.size || 0) });
+  }
+  return files;
+}
+async function enqueueDownload(name) {
+  const remote = joinPath(cwd, name);
+  const ent = entries.find(e => e.name === name);
+  if (ent && ent.is_dir) {
+    $("status").textContent = "Scanning folder…";
+    try {
+      const files = await collectTree(remote);
+      if (!files.length) { toast("Empty folder"); return; }
+      for (const f of files) {
+        const rel = f.path.slice(remote.length).replace(/^\/+/, "") || f.name;
+        Queue.addDownload(f.path, rel.replace(/\//g, "__"), f.size, { silent: true });
+      }
+      Queue.flush();
+      toast("Queued " + files.length + " downloads");
+      $("status").textContent = "Ready";
+    } catch (err) { toast(err.message); log(err.message); }
+  } else {
+    Queue.addDownload(remote, name, ent ? Number(ent.size || 0) : 0);
+  }
+}
+
+$("btnUp").onclick = () => { clearSelection(); cwd = parentPath(cwd); refresh(); };
 $("btnRefresh").onclick = () => refresh();
-$("btnGo").onclick = () => { cwd = $("pathInput").value || "/"; refresh(); };
+$("btnGo").onclick = () => { clearSelection(); cwd = $("pathInput").value || "/"; refresh(); };
 $("pathInput").onkeydown = (e) => { if (e.key === "Enter") $("btnGo").click(); };
 $("btnMkdir").onclick = async () => {
   const name = prompt("Folder name");
@@ -256,60 +729,232 @@ $("btnTouch").onclick = async () => {
   } catch (err) { toast(err.message); }
 };
 $("btnUpload").onclick = () => $("fileInput").click();
+$("btnUploadFolder").onclick = () => $("folderInput").click();
 $("fileInput").onchange = async () => {
-  for (const f of $("fileInput").files) {
-    await uploadFile(f, joinPath(cwd, f.name));
-  }
+  const files = Array.from($("fileInput").files || []);
   $("fileInput").value = "";
-  refresh();
+  if (!files.length) return;
+  await enqueueUploads(files.map(f => ({ file: f, remote: joinPath(cwd, f.name) })));
+  toast("Queued " + files.length + " upload(s)");
 };
-async function uploadFile(file, remote) {
-  $("status").textContent = "Uploading " + file.name;
-  try {
-    const res = await fetch("/api/upload?path=" + encodeURIComponent(remote), {
-      method: "PUT",
-      headers: { "Content-Type": "application/octet-stream" },
-      body: file
-    });
-    if (!res.ok) {
-      let msg = "upload failed";
-      try { const j = await res.json(); msg = j.message || msg; } catch (_) {}
-      throw new Error(msg);
-    }
-    log("uploaded " + remote + " (" + file.size + " B)");
-    toast("Uploaded " + file.name);
-  } catch (err) { toast(err.message); log(err.message); }
+$("folderInput").onchange = async () => {
+  const files = Array.from($("folderInput").files || []);
+  $("folderInput").value = "";
+  if (!files.length) return;
+  await enqueueUploads(files.map(f => {
+    const rel = (f.webkitRelativePath || f.name).replace(/\\/g, "/");
+    return { file: f, remote: joinPath(cwd, rel) };
+  }));
+  toast("Queued " + files.length + " uploads");
+};
+/* Preview whitelist only — no PDF/Office/binaries (would hang HTTP and block transfers). */
+const IMG_EXT = /\.(png|jpe?g|gif|webp|bmp|svg|ico|avif)$/i;
+const TEXT_EXT = /\.(txt|log|md|markdown|csv|tsv|json|xml|html?|css|js|mjs|cjs|ts|tsx|jsx|c|h|cc|cpp|hpp|py|rb|go|rs|java|kt|swift|sh|bash|zsh|ps1|bat|cmd|ini|cfg|conf|ya?ml|toml|env|sql|php|lua|pl|r|tex|nfo|asc|lst|inf|reg|vbs|ahk|properties|gradle|dart|vue|svelte|scss|less|sass|xhtml|gitignore|dockerfile|makefile|cmake|editorconfig|npmrc|prettierrc|eslintrc)$/i;
+const VIEW_MAX_BYTES = 8 * 1024 * 1024;
+let viewerRemote = null;
+let viewerObjectUrl = null;
+let viewerAbort = null;
+
+function fileExtName(name) {
+  const base = String(name || "").split(/[/\\]/).pop() || "";
+  return base;
 }
-$("btnDownload").onclick = () => { if (selected) downloadOne(selected); };
+function isImagePreview(name) { return IMG_EXT.test(fileExtName(name)); }
+function isTextPreview(name) {
+  const n = fileExtName(name);
+  if (TEXT_EXT.test(n)) return true;
+  /* Extensionless common text names */
+  return /^(readme|license|changelog|makefile|dockerfile|gemfile|procfile)$/i.test(n);
+}
+function canPreview(name) {
+  return isImagePreview(name) || isTextPreview(name);
+}
+
+function closeViewer() {
+  if (viewerAbort) {
+    try { viewerAbort.abort(); } catch (_) {}
+    viewerAbort = null;
+  }
+  $("viewer").classList.remove("open");
+  $("viewerBody").innerHTML = "";
+  if (viewerObjectUrl) {
+    URL.revokeObjectURL(viewerObjectUrl);
+    viewerObjectUrl = null;
+  }
+  viewerRemote = null;
+}
+async function openViewer(name) {
+  const remote = joinPath(cwd, name);
+  const ent = entries.find(e => e.name === name);
+  if (!ent || ent.is_dir) {
+    toast("Select a single file to view");
+    return;
+  }
+  if (!canPreview(name)) {
+    toast("No preview for this type — use Download");
+    return;
+  }
+  const size = Number(ent.size || 0);
+  if (viewerAbort) {
+    try { viewerAbort.abort(); } catch (_) {}
+  }
+  const ctrl = new AbortController();
+  viewerAbort = ctrl;
+  viewerRemote = remote;
+  $("viewerTitle").textContent = remote;
+  $("viewerMeta").textContent = "Loading…";
+  $("viewerBody").innerHTML = '<div class="muted">Loading…</div>';
+  $("viewer").classList.add("open");
+  try {
+    if (size > VIEW_MAX_BYTES) {
+      throw new Error("File too large to preview (>" + fmtSize(VIEW_MAX_BYTES) + "). Download instead.");
+    }
+    const res = await fetch("/api/download", { headers: pathHeaders(remote), signal: ctrl.signal });
+    if (!res.ok) throw new Error("preview failed");
+    const buf = await res.arrayBuffer();
+    if (ctrl.signal.aborted) return;
+    const bytes = new Uint8Array(buf);
+    if (viewerObjectUrl) { URL.revokeObjectURL(viewerObjectUrl); viewerObjectUrl = null; }
+
+    if (isImagePreview(name)) {
+      const blob = new Blob([bytes]);
+      viewerObjectUrl = URL.createObjectURL(blob);
+      $("viewerBody").innerHTML = "";
+      const img = document.createElement("img");
+      img.alt = name;
+      img.src = viewerObjectUrl;
+      $("viewerBody").appendChild(img);
+      $("viewerMeta").textContent = "Image · " + fmtSize(bytes.length);
+      return;
+    }
+
+    const text = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+    const pre = document.createElement("pre");
+    pre.textContent = text;
+    $("viewerBody").innerHTML = "";
+    $("viewerBody").appendChild(pre);
+    $("viewerMeta").textContent = "Text preview · " + fmtSize(bytes.length) +
+      (size && bytes.length < size ? " (partial)" : "");
+  } catch (err) {
+    if (ctrl.signal.aborted) return;
+    $("viewerBody").innerHTML = '<div style="color:var(--danger)">' + escapeHtml(err.message || String(err)) + "</div>";
+    $("viewerMeta").textContent = "Error";
+  } finally {
+    if (viewerAbort === ctrl) viewerAbort = null;
+  }
+}
+$("btnView").onclick = () => {
+  const names = selectedNames();
+  if (names.length === 1) {
+    if (canPreview(names[0])) openViewer(names[0]);
+    else toast("No preview for this type — use Download");
+  }
+};
+$("btnViewerClose").onclick = closeViewer;
+$("viewer").onclick = (ev) => { if (ev.target.id === "viewer") closeViewer(); };
+document.addEventListener("keydown", (ev) => {
+  if (ev.key === "Escape" && $("viewer").classList.contains("open")) closeViewer();
+});
+$("btnViewerDownload").onclick = () => {
+  if (!viewerRemote) return;
+  const name = viewerRemote.split("/").pop();
+  enqueueDownload(name);
+};
+$("btnDownload").onclick = async () => {
+  const names = selectedNames();
+  if (!names.length) return;
+  for (const name of names) await enqueueDownload(name);
+  if (names.length > 1) toast("Queued download of " + names.length + " item(s)");
+};
 $("btnRename").onclick = async () => {
-  if (!selected) return;
-  const neu = prompt("New name", selected);
-  if (!neu || neu === selected) return;
+  const names = selectedNames();
+  if (names.length !== 1) {
+    toast("Select a single item to rename");
+    return;
+  }
+  const cur = names[0];
+  const neu = prompt("New name", cur);
+  if (!neu || neu === cur) return;
   try {
     await api("/api/rename", { method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ path: joinPath(cwd, selected), new_path: joinPath(cwd, neu) }) });
-    log("rename " + selected + " -> " + neu); refresh();
+      body: JSON.stringify({ path: joinPath(cwd, cur), new_path: joinPath(cwd, neu) }) });
+    log("rename " + cur + " -> " + neu);
+    selected.clear();
+    selected.add(neu);
+    lastClicked = neu;
+    refresh();
   } catch (err) { toast(err.message); }
 };
 $("btnDelete").onclick = async () => {
-  if (!selected) return;
-  if (!confirm("Delete " + selected + "?")) return;
+  const names = selectedNames();
+  if (!names.length) return;
+  const label = names.length === 1 ? names[0] : (names.length + " items");
+  if (!confirm("Delete " + label + "?")) return;
   try {
-    await api("/api/delete", { method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ path: joinPath(cwd, selected) }) });
-    log("delete " + selected); refresh();
+    for (const name of names) {
+      await api("/api/delete", { method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ path: joinPath(cwd, name) }) });
+      log("delete " + name);
+    }
+    clearSelection();
+    refresh();
   } catch (err) { toast(err.message); }
 };
+
 const dz = $("dropZone");
 dz.addEventListener("dragover", (e) => { e.preventDefault(); dz.classList.add("drop"); });
 dz.addEventListener("dragleave", () => dz.classList.remove("drop"));
+async function readAllEntries(reader) {
+  const out = [];
+  for (;;) {
+    const batch = await new Promise((res, rej) => reader.readEntries(res, rej));
+    if (!batch.length) break;
+    out.push(...batch);
+  }
+  return out;
+}
+async function walkEntry(entry, baseRel) {
+  const rel = baseRel ? baseRel + "/" + entry.name : entry.name;
+  if (entry.isFile) {
+    const file = await new Promise((res, rej) => entry.file(res, rej));
+    return [{ file, rel }];
+  }
+  if (entry.isDirectory) {
+    const reader = entry.createReader();
+    const children = await readAllEntries(reader);
+    const acc = [];
+    for (const child of children) acc.push(...await walkEntry(child, rel));
+    return acc;
+  }
+  return [];
+}
 dz.addEventListener("drop", async (e) => {
   e.preventDefault(); dz.classList.remove("drop");
-  for (const f of e.dataTransfer.files) {
-    await uploadFile(f, joinPath(cwd, f.name));
+  const items = e.dataTransfer.items;
+  if (items && items.length && items[0].webkitGetAsEntry) {
+    const collected = [];
+    for (const item of items) {
+      const entry = item.webkitGetAsEntry && item.webkitGetAsEntry();
+      if (entry) collected.push(...await walkEntry(entry, ""));
+    }
+    if (collected.length) {
+      await enqueueUploads(collected.map(({ file, rel }) => ({ file, remote: joinPath(cwd, rel) })));
+      toast("Queued " + collected.length + " uploads");
+      return;
+    }
   }
-  refresh();
+  const plain = Array.from(e.dataTransfer.files || []);
+  if (plain.length) {
+    await enqueueUploads(plain.map(f => ({ file: f, remote: joinPath(cwd, f.name) })));
+    toast("Queued " + plain.length + " uploads");
+  }
 });
+$("parallelSelect").onchange = () => {
+  maxParallel = Number($("parallelSelect").value) || 1;
+  Queue.pump();
+};
+maxParallel = Number($("parallelSelect").value) || 2;
+Queue.render();
 refresh();
 </script>
 </body>

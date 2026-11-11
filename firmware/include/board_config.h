@@ -30,7 +30,7 @@ static const int PIN_SD_CMD = 16;
 #endif
 
 #ifndef RNDISSTORAGE_PROTOCOL_VERSION
-#define RNDISSTORAGE_PROTOCOL_VERSION "2.4"
+#define RNDISSTORAGE_PROTOCOL_VERSION "2.5"
 #endif
 
 #ifndef RNDISSTORAGE_SOCKS_PORT
@@ -69,16 +69,17 @@ static const int PIN_SD_CMD = 16;
 #endif
 
 #ifndef RNDISSTORAGE_MAX_PATH
-#define RNDISSTORAGE_MAX_PATH 200
+#define RNDISSTORAGE_MAX_PATH 240
 #endif
 
 #ifndef RNDISSTORAGE_MAX_FILE_SIZE
 #define RNDISSTORAGE_MAX_FILE_SIZE (512ULL * 1024ULL * 1024ULL)
 #endif
 
-/** I/O chunk for HTTP upload/download (heap, not stack). */
+/** I/O chunk for HTTP upload/download (heap). Keep modest: 2 parallel
+ *  transfers + TCP/Wi‑Fi on ESP32-S3 without PSRAM; 32KiB×N caused OOM. */
 #ifndef RNDISSTORAGE_IO_CHUNK
-#define RNDISSTORAGE_IO_CHUNK (16 * 1024)
+#define RNDISSTORAGE_IO_CHUNK (8 * 1024)
 #endif
 
 #define SD_MOUNT_POINT "/sdcard"

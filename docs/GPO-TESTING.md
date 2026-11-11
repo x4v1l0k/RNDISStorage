@@ -57,16 +57,7 @@ rsop.msc
 1. Conectar el dongle (alimentación USB).
 2. Verificar que **no** aparece como disco.
 3. Unirse al SoftAP `RNDISStorage` / `rndis-lab` (build lab) **o** esperar IP RNDIS `203.0.113.x` si usas gadget USB-net.
-4. Abrir `http://203.0.113.1/` (explorador web) y/o:
-
-```powershell
-python client\client.py --url http://203.0.113.1 info
-python client\client.py --url http://203.0.113.1 put .\payload-lab.txt /lab.txt
-python client\client.py --url http://203.0.113.1 ls /
-python client\client.py --url http://203.0.113.1 get /lab.txt .\out.txt
-python client\gui.py
-```
-
+4. Abrir `http://203.0.113.1/` (explorador web embebido) y/o mapear WebDAV `http://203.0.113.1/dav/` en el Explorador de Windows; subir/bajar ficheros y carpetas (recursivo).
 5. Registrar si EDR/DLP genera alertas por WebDAV / HTTP local.
 
 ### Registro
@@ -87,5 +78,5 @@ python client\gui.py
 
 - Capturas de `Enumerate-RndisStorageDevice.ps1`
 - `gpresult` / RSOP (solo lectura)
-- Logs del cliente GUI
+- Capturas del explorador web / WebDAV en Explorer
 - Nota de alcance / autorización del engagement

@@ -49,5 +49,3 @@ Thumbs.db
 desktop.ini
 *.log
 gpresult.html
-client/bench_data/
-client/*.cfg

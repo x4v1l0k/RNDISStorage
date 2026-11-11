@@ -22,7 +22,7 @@ struct FileMeta {
   time_t mtime;
 };
 
-// Abstract storage backend. Protocol and client stay backend-agnostic.
+// Abstract storage backend. HTTP/WebDAV stays backend-agnostic.
 class StorageBackend {
  public:
   virtual ~StorageBackend() {}

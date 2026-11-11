@@ -36,6 +36,8 @@ bool storage_exists(const char *path);
 bool storage_is_directory(const char *path);
 bool storage_mkdir(const char *path);
 bool storage_remove(const char *path);
+/** Recursively delete a file or directory tree (needed for WebDAV Depth: infinity). */
+bool storage_remove_recursive(const char *path);
 bool storage_rename(const char *from, const char *to);
 bool storage_stat(const char *path, file_meta_t *meta);
 bool storage_list(const char *path, storage_list_cb_t cb, void *ctx);

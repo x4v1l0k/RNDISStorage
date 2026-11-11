@@ -9,6 +9,7 @@
 #include "esp_log.h"
 #include "esp_netif.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/portmacro.h"
 #include "freertos/task.h"
 #include "lwip/esp_netif_net_stack.h"
 #include "lwip/ip4_addr.h"
@@ -20,10 +21,46 @@
 static const char *TAG = "usb_net";
 static esp_netif_t *s_netif = NULL;
 
+// Small RX pool avoids malloc/free per Ethernet frame on the hot USB path.
+#define USB_RX_POOL 12
+#define USB_RX_MAX 1600
+static uint8_t s_rx_pool[USB_RX_POOL][USB_RX_MAX];
+static uint8_t s_rx_busy[USB_RX_POOL];
+static portMUX_TYPE s_rx_mux = portMUX_INITIALIZER_UNLOCKED;
+
 static void l2_free(void *h, void *buffer)
 {
     (void)h;
+    if (!buffer) {
+        return;
+    }
+    portENTER_CRITICAL(&s_rx_mux);
+    for (int i = 0; i < USB_RX_POOL; i++) {
+        if (buffer == s_rx_pool[i]) {
+            s_rx_busy[i] = 0;
+            portEXIT_CRITICAL(&s_rx_mux);
+            return;
+        }
+    }
+    portEXIT_CRITICAL(&s_rx_mux);
     free(buffer);
+}
+
+static void *rx_alloc(uint16_t len)
+{
+    if (len <= USB_RX_MAX) {
+        portENTER_CRITICAL(&s_rx_mux);
+        for (int i = 0; i < USB_RX_POOL; i++) {
+            if (!s_rx_busy[i]) {
+                s_rx_busy[i] = 1;
+                void *p = s_rx_pool[i];
+                portEXIT_CRITICAL(&s_rx_mux);
+                return p;
+            }
+        }
+        portEXIT_CRITICAL(&s_rx_mux);
+    }
+    return malloc(len);
 }
 
 static esp_err_t netif_transmit(void *h, void *buffer, size_t len)
@@ -42,14 +79,14 @@ static esp_err_t netif_recv_callback(void *buffer, uint16_t len, void *ctx)
     if (!s_netif || !buffer || len == 0) {
         return ESP_OK;
     }
-    void *copy = malloc(len);
+    void *copy = rx_alloc(len);
     if (!copy) {
         return ESP_ERR_NO_MEM;
     }
     memcpy(copy, buffer, len);
     esp_err_t err = esp_netif_receive(s_netif, copy, len, NULL);
     if (err != ESP_OK) {
-        free(copy);
+        l2_free(NULL, copy);
     }
     return err;
 }

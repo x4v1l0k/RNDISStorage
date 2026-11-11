@@ -1,6 +1,6 @@
 # RNDISStorage
 
-**Proof of Concept** — filesystem over **HTTP / WebDAV** on a LILYGO TTGO T-Dongle-S3 (ESP32-S3), reached through a **network path** (SoftAP lab transport) instead of USB Mass Storage.
+**Proof of Concept** — filesystem over **HTTP / WebDAV** on a LILYGO TTGO T-Dongle-S3 (ESP32-S3), reached through a **network path** instead of USB Mass Storage.
 
 Lab tool to measure whether a Windows GPO that blocks **USB Mass Storage** still allows file transfer when the device exposes storage as a **WebDAV / web file explorer** on a local IP (`203.0.113.1`, RFC 5737 TEST-NET-3 — outside 10/172/192 LAN ranges), without enumerating a disk volume.
 
@@ -16,23 +16,22 @@ Lab tool to measure whether a Windows GPO that blocks **USB Mass Storage** still
 | USB Mass Storage (MSC) | Yes | **No** |
 | Disk Drive / Volume letter | Yes | **No** |
 | Network path to files | No | **Yes** (HTTP/WebDAV) |
-| File I/O path | Windows filesystem | WebDAV / REST → microSD |
+| File I/O path | Windows filesystem | WebDAV / browser → microSD |
 
-The dongle does **not** present a removable disk. Storage lives on an inserted **microSD (FAT32)** and is served by an on-device HTTP stack with:
+The dongle does **not** present a removable disk. Storage lives on an inserted **microSD (FAT32)** and is served **Plug&Play** by an on-device HTTP stack:
 
-1. **Web UI** — file-explorer panel at `http://203.0.113.1/`
-2. **WebDAV** — `http://203.0.113.1/dav/` (PROPFIND / GET / PUT / DELETE / MKCOL)
-3. **REST API** — `/api/*` used by the Python GUI/CLI
+1. **WebDAV** — `http://203.0.113.1/dav/` → map as network location / Explorer drag-and-drop (folders recursive)
+2. **Web UI** — file explorer at `http://203.0.113.1/` (upload files/folders, no install)
 
 ### Transport note (current build)
 
 The default PlatformIO env brings up:
 
-1. **USB NCM** gadget (Windows: USB Ethernet / UsbNcm) → host DHCP near `203.0.113.2` → UI at `http://203.0.113.1/`
-2. **Wi‑Fi SoftAP** `RNDISStorage` / `rndis-lab` → UI at `http://192.168.4.1/`
+1. **USB NCM** gadget (Windows: USB Ethernet / UsbNcm) → host DHCP near `203.0.113.2` → WebDAV/UI at `http://203.0.113.1/`
+2. **Wi‑Fi SoftAP** `RNDISStorage` / `rndis-lab` → `http://192.168.4.1/`
 3. **Host pivot** from SoftAP → USB host (`203.0.113.2`) via on-dongle **SOCKS5 `:1080`** (recommended) or best-effort NAPT
 
-Same HTTP / WebDAV / REST UI on USB and SoftAP. **No USB Mass Storage.** Full pivot cookbook: [docs/PIVOT.md](docs/PIVOT.md).
+Same WebDAV / web UI on USB and SoftAP. **No USB Mass Storage.** Full pivot cookbook: [docs/PIVOT.md](docs/PIVOT.md).
 
 ---
 
@@ -50,7 +49,7 @@ Same HTTP / WebDAV / REST UI on USB and SoftAP. **No USB Mass Storage.** Full pi
 - **SOCKS5:** reliable SoftAP→host pivot on `192.168.4.1:1080`
 - **No USB MSC**
 - **Storage:** SD card via SDMMC
-- **Host:** browser explorer, Python CLI, dual-pane tkinter GUI
+- **Host:** Windows Explorer / browser only (Plug&Play)
 
 ---
 
@@ -58,8 +57,7 @@ Same HTTP / WebDAV / REST UI on USB and SoftAP. **No USB Mass Storage.** Full pi
 
 ```
 firmware/     PlatformIO firmware (ESP32-S3, SoftAP, WebDAV, SD, display)
-client/       Python library, CLI, and tkinter GUI (HTTP/WebDAV)
-docs/         Hardware, WebDAV API, Windows enumeration, GPO tests
+docs/         Hardware, WebDAV, Windows enumeration, GPO tests
 scripts/      PnP inventory helper + www embed helper
 ```
 
@@ -71,7 +69,7 @@ scripts/      PnP inventory helper + www embed helper
 | --- | --- |
 | Hardware | [LILYGO TTGO T-Dongle-S3](https://github.com/Xinyuan-LilyGO/T-Dongle-S3), microSD (FAT/FAT32), USB Type-A host |
 | Firmware | [PlatformIO](https://platformio.org/) + ESP32 platform |
-| Host | Windows 10/11, Python 3.10+, `requests`; Wi‑Fi to join SoftAP (lab build) |
+| Host | Windows 10/11 browser and/or Explorer WebDAV; Wi‑Fi optional for SoftAP |
 
 ---
 
@@ -103,35 +101,12 @@ See [docs/PIVOT.md](docs/PIVOT.md) for probe API, `ncat` on Windows, and firewal
 
 If flash fails because the port disappeared: hold **BOOT**, re-plug, release **BOOT**, then `pio run -t upload`.
 
-### 3. Install client
+### 3. Plug&Play file transfer
 
-```powershell
-cd client
-python -m pip install -r requirements.txt
-```
+- Browser: [http://203.0.113.1/](http://203.0.113.1/) — upload files or whole folders  
+- WebDAV: map `http://203.0.113.1/dav/` in Explorer and copy directories recursively  
 
-### 4. CLI examples
-
-```powershell
-python client.py discover
-python client.py --url http://203.0.113.1 info
-python client.py --url http://203.0.113.1 ls /
-python client.py --url http://203.0.113.1 put .\test.txt /test.txt
-python client.py --url http://203.0.113.1 get /test.txt .\out.txt
-python client.py --url http://203.0.113.1 propfind /
-python client.py --url http://203.0.113.1 format --filesystem fat32 --confirm yes
-```
-
-### 5. GUI
-
-```powershell
-python gui.py
-```
-
-- Left pane: local filesystem  
-- Right pane: remote SD over WebDAV/HTTP  
-- URL defaults to `http://203.0.113.1`  
-- Dark theme, dual explorer, transfer / rename / mkdir / format
+Details: [docs/WEBDAV.md](docs/WEBDAV.md).
 
 ---
 
